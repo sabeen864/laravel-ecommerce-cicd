@@ -13,6 +13,9 @@ COPY --chown=33:33 . .
 
 USER 33
 
+# Set working directory first
+WORKDIR /var/www
+
 # Fix git safe directory
 RUN git config --global --add safe.directory /var/www
 
