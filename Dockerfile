@@ -13,6 +13,9 @@ COPY --chown=33:33 . .
 
 USER 33
 
+# Fix git safe directory
+RUN git config --global --add safe.directory /var/www
+
 RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
 RUN composer dump-autoload --optimize
 
