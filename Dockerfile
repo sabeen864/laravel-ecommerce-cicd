@@ -7,21 +7,23 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www
 
-COPY --chown=33:33 . .
+# Copy code as root first
+COPY . .
 
-USER 33
+# Fix git safe directory using --system
+RUN git config --system --add safe.directory /var/www
 
-# Set working directory first
-WORKDIR /var/www
-
-# Fix git safe directory
-RUN git config --global --add safe.directory /var/www
-
+# Install Composer deps
 RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
 RUN composer dump-autoload --optimize
 
+# Set permissions
 RUN chmod -R 775 storage bootstrap/cache && chmod 755 artisan
+
+# Switch to www-data after everything
+USER 33
 
 CMD ["php-fpm"]
