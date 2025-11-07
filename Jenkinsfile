@@ -3,12 +3,10 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
-        stage('Build & Push Image') {
+        stage('Build & Push') {
             steps {
                 sh '''
                 docker build -t sabeen123/laravel-ecommerce:latest .
@@ -22,18 +20,23 @@ pipeline {
                 sh '''
                 mkdir -p ~/laravel-ecommerce-cicd
                 cp -r * ~/laravel-ecommerce-cicd/ || true
-
-                # FIX PERMISSIONS INSIDE CONTAINER (NO SUDO!)
-                docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
-                docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
-
                 cd ~/laravel-ecommerce-cicd
+
+                # STOP OLD
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
+
+                # START FRESH
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
 
+                # WAIT FOR CONTAINERS
                 sleep 15
 
-                # Run Laravel setup
+                # FIX PERMISSIONS INSIDE RUNNING CONTAINER
+                docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs
+                docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+                docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+
+                # LARAVEL SETUP
                 docker exec cicd-app-1 composer install --no-dev --optimize-autoloader
                 docker exec cicd-app-1 php artisan key:generate --force
                 docker exec cicd-app-1 php artisan migrate --force --seed
