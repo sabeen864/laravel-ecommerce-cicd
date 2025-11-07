@@ -8,26 +8,22 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Build & Push Image') {
             steps {
-                script {
-                    withDockerRegistry([credentialsId: 'dockerhub', url: 'https://index.docker.io/v1/']) {
-                        def app = docker.build("sabeen123/laravel-ecommerce:latest")
-                        app.push()
-                    }
-                }
+                sh '''
+                docker build -t sabeen123/laravel-ecommerce:latest .
+                docker push sabeen123/laravel-ecommerce:latest
+                '''
             }
         }
 
-        stage('Deploy to EC2') {
+        stage('Deploy') {
             steps {
                 sh '''
-                # Copy files to home
                 mkdir -p ~/laravel-ecommerce-cicd
                 cp -r * ~/laravel-ecommerce-cicd/ || true
-
-                # Deploy from home
                 cd ~/laravel-ecommerce-cicd
+
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d
                 '''
@@ -36,11 +32,7 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Deployment successful! App is live on http://3.106.170.54:8081'
-        }
-        failure {
-            echo 'Deployment failed!'
-        }
+        success { echo 'LIVE: http://3.106.170.54:8081' }
+        failure { echo 'FAILED!' }
     }
 }

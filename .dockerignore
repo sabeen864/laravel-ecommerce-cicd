@@ -1,0 +1,5 @@
+storage/
+node_modules/
+vendor/
+.env
+.git
