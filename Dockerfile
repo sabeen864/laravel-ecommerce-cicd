@@ -13,7 +13,8 @@ WORKDIR /var/www
 # Copy code as root first
 COPY . .
 RUN mkdir -p storage bootstrap/cache && 
-    chown -R www-data:www-data storage bootstrap/cache && 
+    chmod -R 775 storage bootstrap/cache
+RUN mkdir -p storage bootstrap/cache && 
     chmod -R 775 storage bootstrap/cache
 
 # Fix git safe directory using --system
