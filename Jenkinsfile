@@ -28,13 +28,17 @@ pipeline {
                 # START FRESH
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
 
-                # WAIT FOR CONTAINERS
+                # WAIT
                 sleep 15
 
-                # FIX PERMISSIONS INSIDE RUNNING CONTAINER
+                # COPY .env INTO CONTAINER
+                docker cp .env cicd-app-1:/var/www/.env
+
+                # FIX PERMISSIONS
                 docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs
-                docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+                docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/.env
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+                docker exec -u root cicd-app-1 chmod 644 /var/www/.env
 
                 # LARAVEL SETUP
                 docker exec cicd-app-1 composer install --no-dev --optimize-autoloader
