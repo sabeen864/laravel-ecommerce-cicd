@@ -22,6 +22,11 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 sh '''
+                # Copy files to home
+                mkdir -p ~/laravel-ecommerce-cicd
+                cp -r * ~/laravel-ecommerce-cicd/ || true
+
+                # Deploy from home
                 cd ~/laravel-ecommerce-cicd
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d
