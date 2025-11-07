@@ -12,10 +12,7 @@ WORKDIR /var/www
 
 # Copy code as root first
 COPY . .
-RUN mkdir -p storage bootstrap/cache && 
-    chmod -R 775 storage bootstrap/cache
-RUN mkdir -p storage bootstrap/cache && 
-    chmod -R 775 storage bootstrap/cache
+RUN mkdir -p storage bootstrap/cache && chmod -R 775 storage bootstrap/cache
 
 # Fix git safe directory using --system
 RUN git config --system --add safe.directory /var/www
@@ -25,7 +22,6 @@ RUN composer install --no-dev --no-interaction --optimize-autoloader --no-script
 RUN composer dump-autoload --optimize
 
 # Set permissions
-RUN chmod -R 775 storage bootstrap/cache && chmod 755 artisan
 
 # Switch to www-data after everything
 USER 33
