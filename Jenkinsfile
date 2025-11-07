@@ -22,6 +22,9 @@ pipeline {
                 sh '''
                 mkdir -p ~/laravel-ecommerce-cicd
                 cp -r * ~/laravel-ecommerce-cicd/ || true
+                sudo chown -R 33:33 ~/laravel-ecommerce-cicd/storage ~/laravel-ecommerce-cicd/bootstrap/cache
+
+                sudo chmod -R 775 ~/laravel-ecommerce-cicd/storage ~/laravel-ecommerce-cicd/bootstrap/cache
                 cp .env.example .env 2>/dev/null || true
 
                 chmod -R 777 storage bootstrap/cache
