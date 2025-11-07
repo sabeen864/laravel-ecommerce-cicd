@@ -22,11 +22,9 @@ pipeline {
                 cp -r * ~/laravel-ecommerce-cicd/ || true
                 cd ~/laravel-ecommerce-cicd
 
-                # CREATE .env FROM .env.example (SAFE)
-                if [ ! -f .env ] && [ -f .env.example ]; then
-                    cp .env.example .env
-                    sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
-                fi
+                # CREATE .env
+                cp .env.example .env || true
+                sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
 
                 # STOP OLD
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
@@ -40,7 +38,7 @@ pipeline {
                 # COPY .env INTO CONTAINER
                 docker cp .env cicd-app-1:/var/www/.env
 
-                # FIX PERMISSIONS
+                # FIX LOGS DIRECTORY + PERMISSIONS
                 docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/.env
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
