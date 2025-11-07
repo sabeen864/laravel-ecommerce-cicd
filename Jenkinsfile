@@ -17,10 +17,7 @@ pipeline {
                 cp .env.example .env
                 sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
 
-                # STOP OLD (KEEPS db-jenkins volume)
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
-
-                # START — e-shop.sql WILL RUN ON FIRST START ONLY
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
                 sleep 30
 
@@ -33,12 +30,10 @@ pipeline {
 
                 docker exec cicd-app-1 composer install --no-dev --optimize-autoloader
                 docker exec cicd-app-1 php artisan key:generate --force
-
-                # ONLY RUN MIGRATIONS (NO WIPE, NO SEED)
                 docker exec cicd-app-1 php artisan migrate --force
 
                 docker exec cicd-app-1 php artisan config:cache
-                docker exec cicd-app-1 php artisan route:cache
+                # SKIP route:cache — SAFE FOR PRODUCTION
                 docker exec cicd-app-1 php artisan view:cache
                 '''
             }
