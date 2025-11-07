@@ -1,11 +1,7 @@
 pipeline {
     agent any
-
     stages {
-        stage('Checkout') {
-            steps { checkout scm }
-        }
-
+        stage('Checkout') { steps { checkout scm } }
         stage('Build & Push') {
             steps {
                 sh '''
@@ -14,42 +10,33 @@ pipeline {
                 '''
             }
         }
-
         stage('Deploy') {
             steps {
                 sh '''
-                # USE JENKINS WORKSPACE (AUTO-SET)
                 cd ${WORKSPACE}
-
-                # DEBUG: SHOW FILES
-                echo "=== FILES IN WORKSPACE ==="
-                ls -la .env* || echo "NO .env FILES"
-
-                # CREATE .env FROM .env.example
                 cp .env.example .env
                 sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
-                echo ".env CREATED"
 
-                # STOP OLD
+                # STOP OLD (KEEPS db-jenkins volume)
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
 
-                # START NEW
+                # START — e-shop.sql WILL RUN ON FIRST START ONLY
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
-                sleep 20
+                sleep 30
 
-                # COPY .env INTO CONTAINER
                 docker cp .env cicd-app-1:/var/www/.env
 
-                # FIX PERMISSIONS
                 docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/.env
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
 
-                # LARAVEL SETUP
                 docker exec cicd-app-1 composer install --no-dev --optimize-autoloader
                 docker exec cicd-app-1 php artisan key:generate --force
-                docker exec cicd-app-1 php artisan migrate --force --seed
+
+                # ONLY RUN MIGRATIONS (NO WIPE, NO SEED)
+                docker exec cicd-app-1 php artisan migrate --force
+
                 docker exec cicd-app-1 php artisan config:cache
                 docker exec cicd-app-1 php artisan route:cache
                 docker exec cicd-app-1 php artisan view:cache
@@ -57,7 +44,6 @@ pipeline {
             }
         }
     }
-
     post {
         success { echo 'LIVE: http://3.106.170.54:8081' }
         failure { echo 'FAILED!' }
