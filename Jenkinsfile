@@ -28,7 +28,7 @@ pipeline {
                 cd ~/laravel-ecommerce-cicd
 
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
-                docker-compose -f docker-compose-jenkins.yml -p cicd up -d
+                docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans --remove-orphans
                 '''
             }
         }
