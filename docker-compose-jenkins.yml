@@ -15,7 +15,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
   app:
     image: sabeen123/laravel-ecommerce:latest
     depends_on:
@@ -27,18 +26,16 @@ services:
       DB_USERNAME: laravel
       DB_PASSWORD: secret
     volumes:
-      - app-data:/var/www  # ← SHARED VOLUME
-
+      - app-data:/var/www # ← SHARED VOLUME
   nginx:
     image: nginx:alpine
     ports:
       - "8081:80"
     volumes:
-      - app-data:/var/www  # ← READ FROM SAME VOLUME
+      - app-data:/var/www:ro # ← READ FROM SAME VOLUME
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - app
-
 volumes:
   db-jenkins:
-  app-data:  # ← NEW VOLUME
+  app-data: # ← NEW VOLUME
