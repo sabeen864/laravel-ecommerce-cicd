@@ -24,7 +24,7 @@ pipeline {
                 cp -r * ~/laravel-ecommerce-cicd/ || true
                 cp .env.example .env 2>/dev/null || true
 
-                sudo chmod -R 777 storage bootstrap/cache
+                chmod -R 777 storage bootstrap/cache
                 cd ~/laravel-ecommerce-cicd
 
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
