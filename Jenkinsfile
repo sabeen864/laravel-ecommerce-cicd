@@ -22,6 +22,10 @@ pipeline {
                 cp -r * ~/laravel-ecommerce-cicd/ || true
                 cd ~/laravel-ecommerce-cicd
 
+                # CREATE .env FROM .env.example
+                cp .env.example .env || true
+                sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
+
                 # STOP OLD
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
 
