@@ -29,6 +29,15 @@ pipeline {
 
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans --remove-orphans
+                sleep 10
+
+                docker exec cicd-app-1 php artisan key:generate --force
+
+                docker exec cicd-app-1 php artisan migrate --force
+
+                docker exec cicd-app-1 php artisan config:cache
+
+                docker exec cicd-app-1 php artisan route:cache
                 '''
             }
         }
