@@ -23,7 +23,7 @@ pipeline {
 
                 docker cp .env cicd-app-1:/var/www/.env
 
-                docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs
+                docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs /var/www/storage/framework/views
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/.env
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
@@ -33,8 +33,8 @@ pipeline {
                 docker exec cicd-app-1 php artisan migrate --force
 
                 docker exec cicd-app-1 php artisan config:cache
-                # SKIP route:cache — SAFE FOR PRODUCTION
-                docker exec cicd-app-1 php artisan view:cache
+                # SKIP view:cache — SAFE FOR PRODUCTION
+                # docker exec cicd-app-1 php artisan view:cache
                 '''
             }
         }
