@@ -32,7 +32,7 @@ pipeline {
     }
 
     post {
-        success { echo 'LIVE: http://3.106.170.54:8081' }
+        success { echo 'LIVE: http://13.54.247.55:8081' }
         failure { echo 'FAILED!' }
     }
 }
