@@ -18,27 +18,29 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                mkdir -p ~/laravel-ecommerce-cicd
-                cp -r * ~/laravel-ecommerce-cicd/ || true
-                cd ~/laravel-ecommerce-cicd
+                # USE JENKINS WORKSPACE (AUTO-SET)
+                cd ${WORKSPACE}
 
-                # CREATE .env
-                cp .env.example .env || true
+                # DEBUG: SHOW FILES
+                echo "=== FILES IN WORKSPACE ==="
+                ls -la .env* || echo "NO .env FILES"
+
+                # CREATE .env FROM .env.example
+                cp .env.example .env
                 sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
+                echo ".env CREATED"
 
                 # STOP OLD
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
 
-                # START FRESH
+                # START NEW
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
-
-                # WAIT
                 sleep 20
 
                 # COPY .env INTO CONTAINER
                 docker cp .env cicd-app-1:/var/www/.env
 
-                # FIX LOGS DIRECTORY + PERMISSIONS
+                # FIX PERMISSIONS
                 docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/.env
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
