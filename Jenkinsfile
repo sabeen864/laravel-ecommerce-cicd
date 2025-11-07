@@ -22,35 +22,31 @@ pipeline {
                 sh '''
                 mkdir -p ~/laravel-ecommerce-cicd
                 cp -r * ~/laravel-ecommerce-cicd/ || true
-                sudo chown -R 33:33 ~/laravel-ecommerce-cicd/storage ~/laravel-ecommerce-cicd/bootstrap/cache
 
-                sudo chmod -R 775 ~/laravel-ecommerce-cicd/storage ~/laravel-ecommerce-cicd/bootstrap/cache
-                cp .env.example .env 2>/dev/null || true
+                # FIX PERMISSIONS INSIDE CONTAINER (NO SUDO!)
+                docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
+                docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache 2>/dev/null || true
 
-                chmod -R 777 storage bootstrap/cache
                 cd ~/laravel-ecommerce-cicd
-
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
-                docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans --remove-orphans
-                sleep 10
+                docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
+
+                sleep 15
+
+                # Run Laravel setup
                 docker exec cicd-app-1 composer install --no-dev --optimize-autoloader
-
-
-
-
-
+                docker exec cicd-app-1 php artisan key:generate --force
+                docker exec cicd-app-1 php artisan migrate --force --seed
+                docker exec cicd-app-1 php artisan config:cache
+                docker exec cicd-app-1 php artisan route:cache
                 docker exec cicd-app-1 php artisan view:cache
-
-
-
-
                 '''
             }
         }
     }
 
     post {
-        success { echo 'LIVE: http://13.54.247.55:8081' }
+        success { echo 'LIVE: http://3.106.170.54:8081' }
         failure { echo 'FAILED!' }
     }
 }
