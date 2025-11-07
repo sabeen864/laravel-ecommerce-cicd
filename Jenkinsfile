@@ -22,9 +22,11 @@ pipeline {
                 cp -r * ~/laravel-ecommerce-cicd/ || true
                 cd ~/laravel-ecommerce-cicd
 
-                # CREATE .env FROM .env.example
-                cp .env.example .env || true
-                sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
+                # CREATE .env FROM .env.example (SAFE)
+                if [ ! -f .env ] && [ -f .env.example ]; then
+                    cp .env.example .env
+                    sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" .env
+                fi
 
                 # STOP OLD
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
@@ -33,7 +35,7 @@ pipeline {
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
 
                 # WAIT
-                sleep 15
+                sleep 20
 
                 # COPY .env INTO CONTAINER
                 docker cp .env cicd-app-1:/var/www/.env
