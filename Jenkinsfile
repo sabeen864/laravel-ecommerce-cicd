@@ -5,15 +5,6 @@ pipeline {
             steps { checkout scm } 
         }
         
-        stage('Build & Push') {
-            steps {
-                sh '''
-                docker build -t sabeen123/laravel-ecommerce:latest .
-                docker push sabeen123/laravel-ecommerce:latest
-                '''
-            }
-        }
-        
         stage('Deploy') {
             steps {
                 sh '''
@@ -22,6 +13,9 @@ pipeline {
                 # Get current public IP dynamically
                 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
                 echo "Deploying to: http://${PUBLIC_IP}:8081"
+
+                # Pull latest image
+                docker pull sabeen123/laravel-ecommerce:latest
 
                 # Stop existing containers
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
