@@ -10,8 +10,8 @@ pipeline {
                 sh '''
                 cd ${WORKSPACE}
 
-                # Get current public IP dynamically
-                PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+                # Get current public IP dynamically (with timeout)
+                PUBLIC_IP=$(timeout 5 curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "13.54.247.55")
                 echo "Deploying to: http://${PUBLIC_IP}:8081"
 
                 # Pull latest image
@@ -27,6 +27,7 @@ pipeline {
                 sed -i "s|DB_DATABASE=.*|DB_DATABASE=clothing|g" .env
                 sed -i "s|DB_USERNAME=.*|DB_USERNAME=laravel|g" .env
                 sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=secret|g" .env
+                sed -i "s|APP_KEY=.*|APP_KEY=base64:$(openssl rand -base64 32)|g" .env
 
                 # Start containers
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
@@ -41,12 +42,10 @@ pipeline {
                 docker exec -u root cicd-app-1 chown www-data:www-data /var/www/.env
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
 
-                # Run Laravel setup
-                docker exec cicd-app-1 php artisan key:generate --force
+                # Run Laravel setup (without route:cache due to duplicate route error)
                 docker exec cicd-app-1 php artisan migrate --force
                 docker exec cicd-app-1 php artisan storage:link
                 docker exec cicd-app-1 php artisan config:cache
-                docker exec cicd-app-1 php artisan route:cache
                 
                 echo "✅ LIVE: http://${PUBLIC_IP}:8081"
                 '''
