@@ -1,7 +1,10 @@
 pipeline {
     agent any
     stages {
-        stage('Checkout') { steps { checkout scm } }
+        stage('Checkout') { 
+            steps { checkout scm } 
+        }
+        
         stage('Build & Push') {
             steps {
                 sh '''
@@ -10,42 +13,58 @@ pipeline {
                 '''
             }
         }
+        
         stage('Deploy') {
             steps {
                 sh '''
                 cd ${WORKSPACE}
-                
-                # FIXED: Copy everything EXCEPT .git folder
-                mkdir -p /var/lib/jenkins/app-data
-                rsync -a --exclude='.git' --delete . /var/lib/jenkins/app-data/
-                
-                # UPDATE .env
-                cp .env.example /var/lib/jenkins/app-data/.env
-                sed -i "s|APP_URL=.*|APP_URL=http://3.106.170.54:8081|g" /var/lib/jenkins/app-data/.env
-                
+
+                # Get current public IP dynamically
+                PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+                echo "Deploying to: http://${PUBLIC_IP}:8081"
+
+                # Stop existing containers
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
+
+                # Update .env file
+                cp .env.example .env
+                sed -i "s|APP_URL=.*|APP_URL=http://${PUBLIC_IP}:8081|g" .env
+                sed -i "s|DB_HOST=.*|DB_HOST=db|g" .env
+                sed -i "s|DB_DATABASE=.*|DB_DATABASE=clothing|g" .env
+                sed -i "s|DB_USERNAME=.*|DB_USERNAME=laravel|g" .env
+                sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=secret|g" .env
+
+                # Start containers
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
-                
-                sleep 40
-                
-                # COPY .env INTO CONTAINER
-                docker cp /var/lib/jenkins/app-data/.env cicd-app-1:/var/www/.env
-                
-                docker exec -u root cicd-app-1 mkdir -p /var/www/storage/logs /var/www/storage/framework/views
-                docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/.env
-                docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+
+                # Wait for containers
+                sleep 20
+
+                # Copy .env into container
+                docker cp .env cicd-app-1:/var/www/.env
+
+                # Set permissions
+                docker exec -u root cicd-app-1 chown www-data:www-data /var/www/.env
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
-                
-                docker exec cicd-app-1 composer install --no-dev --optimize-autoloader
+
+                # Run Laravel setup
                 docker exec cicd-app-1 php artisan key:generate --force
                 docker exec cicd-app-1 php artisan migrate --force
+                docker exec cicd-app-1 php artisan storage:link
                 docker exec cicd-app-1 php artisan config:cache
+                docker exec cicd-app-1 php artisan route:cache
+                
+                echo "✅ LIVE: http://${PUBLIC_IP}:8081"
                 '''
             }
         }
     }
     post {
-        success { echo 'LIVE: http://3.106.170.54:8081' }
-        failure { echo 'FAILED!' }
+        success { 
+            echo '✅ DEPLOYMENT SUCCESSFUL!'
+        }
+        failure { 
+            echo '❌ DEPLOYMENT FAILED!' 
+        }
     }
 }
