@@ -151,7 +151,7 @@ pipeline {
                             
                             <h3>Application URLs</h3>
                             <ul>
-                                <li><strong>Live App:</strong> <a href="http://13.238.154.200:8081">http://13.238.154.200:8081</a></li>
+                                <li><strong>Live App:</strong> <a href="http://13.27.51.77:8081">http://13.27.51.77:8081</a></li>
                                 <li><strong>Jenkins:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></li>
                                 <li><strong>Test Results:</strong> <a href="${BUILD_URL}testReport/">${BUILD_URL}testReport/</a></li>
                             </ul>
