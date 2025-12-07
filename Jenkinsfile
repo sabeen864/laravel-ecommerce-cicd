@@ -51,13 +51,136 @@ pipeline {
                 '''
             }
         }
+
+        stage('Test') {
+            agent {
+                docker {
+                    image 'markhobson/maven-chrome:latest'
+                    args '--network host -v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
+                }
+            }
+            steps {
+                script {
+                    echo 'Starting Selenium UI Tests...'
+                    
+                    // Clone the test repository
+                    sh '''
+                        # Clean up any previous test directory
+                        rm -rf laravel-ecommerce-tests
+                        
+                        # Clone the tests repository
+                        git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
+                        cd laravel-ecommerce-tests
+                        
+                        echo "Test repository cloned successfully"
+                        ls -la
+                    '''
+                    
+                    // Run Maven tests
+                    sh '''
+                        cd laravel-ecommerce-tests
+                        
+                        echo "Running Maven tests..."
+                        mvn clean test
+                    '''
+                }
+            }
+            post {
+                always {
+                    // Publish JUnit test results
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                    
+                    // Archive test reports
+                    archiveArtifacts artifacts: '**/target/surefire-reports/*', allowEmptyArchive: true
+                }
+                success {
+                    echo '✅ All Selenium tests passed!'
+                }
+                failure {
+                    echo '❌ Some Selenium tests failed!'
+                }
+            }
+        }
     }
     post {
+        always {
+            script {
+                // Get the pusher's email from Git SCM
+                def pusherEmail = sh(
+                    script: "git log -1 --pretty=format:'%ae'",
+                    returnStdout: true
+                ).trim()
+                
+                // Fallback email if pusher email is not found
+                if (!pusherEmail || pusherEmail.isEmpty()) {
+                    pusherEmail = 'sabeen864@gmail.com'
+                }
+                
+                echo "📧 Sending notification to: ${pusherEmail}"
+                
+                // Determine build status
+                def buildStatus = currentBuild.result ?: 'SUCCESS'
+                def statusIcon = buildStatus == 'SUCCESS' ? '✅' : '❌'
+                def statusColor = buildStatus == 'SUCCESS' ? 'green' : 'red'
+                
+                // Send email notification
+                emailext(
+                    to: pusherEmail,
+                    subject: "${statusIcon} Laravel Ecommerce CI/CD - Build #${BUILD_NUMBER} - ${buildStatus}",
+                    body: """
+                        <html>
+                        <body style="font-family: Arial, sans-serif;">
+                            <h2 style="color: ${statusColor};">${statusIcon} Build ${buildStatus}</h2>
+                            
+                            <h3>Build Information</h3>
+                            <ul>
+                                <li><strong>Project:</strong> ${JOB_NAME}</li>
+                                <li><strong>Build Number:</strong> ${BUILD_NUMBER}</li>
+                                <li><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${buildStatus}</span></li>
+                                <li><strong>Duration:</strong> ${currentBuild.durationString}</li>
+                                <li><strong>Triggered By:</strong> ${pusherEmail}</li>
+                            </ul>
+                            
+                            <h3>Stage Results</h3>
+                            <ul>
+                                <li>✅ Checkout: Completed</li>
+                                <li>✅ Deploy: ${buildStatus == 'SUCCESS' ? 'Completed' : 'Check logs'}</li>
+                                <li>${buildStatus == 'SUCCESS' ? '✅' : '❌'} Test: ${buildStatus == 'SUCCESS' ? 'All tests passed' : 'Some tests failed'}</li>
+                            </ul>
+                            
+                            <h3>Application URLs</h3>
+                            <ul>
+                                <li><strong>Live App:</strong> <a href="http://13.238.154.200:8081">http://13.238.154.200:8081</a></li>
+                                <li><strong>Jenkins:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></li>
+                                <li><strong>Test Results:</strong> <a href="${BUILD_URL}testReport/">${BUILD_URL}testReport/</a></li>
+                            </ul>
+                            
+                            <h3>Git Information</h3>
+                            <ul>
+                                <li><strong>Repository:</strong> laravel-ecommerce-cicd</li>
+                                <li><strong>Branch:</strong> ${GIT_BRANCH}</li>
+                                <li><strong>Commit:</strong> ${GIT_COMMIT}</li>
+                            </ul>
+                            
+                            <p style="margin-top: 20px; color: #666;">
+                                <em>This is an automated notification from Jenkins CI/CD Pipeline</em>
+                            </p>
+                        </body>
+                        </html>
+                    """,
+                    mimeType: 'text/html',
+                    attachLog: true
+                )
+            }
+        }
         success { 
-            echo '✅ DEPLOYMENT SUCCESSFUL!'
+            echo '✅ PIPELINE COMPLETED SUCCESSFULLY!'
+            echo '📊 All stages passed: Checkout → Deploy → Test'
         }
         failure { 
-            echo '❌ DEPLOYMENT FAILED!' 
+            echo '❌ PIPELINE FAILED!' 
+            echo 'Check the logs for details'
         }
     }
 }
