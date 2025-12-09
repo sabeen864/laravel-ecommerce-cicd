@@ -1,5 +1,10 @@
 pipeline {
     agent any
+    
+    environment {
+        APP_URL = "http://13.27.51.77:8081"  // Hardcode your IP
+    }
+    
     stages {
         stage('Checkout') {
             steps { checkout scm }
@@ -8,9 +13,8 @@ pipeline {
             steps {
                 sh '''
                 cd ${WORKSPACE}
-                # Get public IP
-                PUBLIC_IP=$(timeout 5 curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "13.27.51.77")
-                echo "Deploying to: http://${PUBLIC_IP}:8081"
+                
+                echo "Deploying to: ${APP_URL}"
 
                 # Deploy
                 docker pull sabeen123/laravel-ecommerce:latest
@@ -18,7 +22,7 @@ pipeline {
 
                 # Config
                 cp .env.example .env
-                sed -i "s|APP_URL=.*|APP_URL=http://${PUBLIC_IP}:8081|g" .env
+                sed -i "s|APP_URL=.*|APP_URL=${APP_URL}|g" .env
                 sed -i "s|DB_HOST=.*|DB_HOST=db|g" .env
                 sed -i "s|DB_DATABASE=.*|DB_DATABASE=clothing|g" .env
                 sed -i "s|DB_USERNAME=.*|DB_USERNAME=laravel|g" .env
@@ -34,14 +38,14 @@ pipeline {
                 
                 docker cp .env cicd-app-1:/var/www/.env
                 
-                # FIX: Set all Laravel permissions properly
+                # Set Laravel permissions
                 echo "🔧 Setting permissions..."
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chown www-data:www-data /var/www/.env
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
                 
-                # Run artisan commands (with || true to continue on errors)
+                # Run artisan commands
                 echo "🚀 Running Laravel commands..."
                 docker exec cicd-app-1 php artisan cache:clear || true
                 docker exec cicd-app-1 php artisan config:clear || true
@@ -49,7 +53,7 @@ pipeline {
                 docker exec cicd-app-1 php artisan storage:link || true
                 docker exec cicd-app-1 php artisan config:cache || true
 
-                echo "✅ LIVE: http://${PUBLIC_IP}:8081"
+                echo "✅ LIVE: ${APP_URL}"
                 '''
             }
         }
@@ -68,11 +72,20 @@ pipeline {
                         echo "⏳ Waiting for application to be ready..."
                         for i in {1..30}; do
                             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://13.27.51.77:8081 || echo "000")
-                            if [ "$HTTP_CODE" = "200" ]; then
-                                echo "✅ Application is ready! (HTTP $HTTP_CODE)"
+                            echo "Attempt $i/30: HTTP Status = $HTTP_CODE"
+                            
+                            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+                                echo "✅ Application is ready!"
                                 break
                             fi
-                            echo "Attempt $i/30: Got HTTP $HTTP_CODE, waiting..."
+                            
+                            if [ $i -eq 30 ]; then
+                                echo "❌ Application failed to become ready after 30 attempts"
+                                echo "Checking container logs..."
+                                docker logs cicd-app-1 --tail 20 || true
+                                exit 1
+                            fi
+                            
                             sleep 2
                         done
                     '''
@@ -117,7 +130,7 @@ pipeline {
                     body: """
                         <h2 style="color:${color}">${icon} Build ${status}</h2>
                         <p><strong>Job:</strong> ${JOB_NAME} #${BUILD_NUMBER}</p>
-                        <p><strong>App URL:</strong> <a href="http://13.27.51.77:8081">http://13.27.51.77:8081</a></p>
+                        <p><strong>App URL:</strong> <a href="${APP_URL}">${APP_URL}</a></p>
                         <p><strong>Console:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
                     """,
                     mimeType: 'text/html'
