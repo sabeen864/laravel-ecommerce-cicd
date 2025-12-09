@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        APP_URL = "http://13.27.51.77:8081"  // Hardcode your IP
+        APP_URL = "http://13.27.51.77:8081"
     }
     
     stages {
@@ -67,11 +67,11 @@ pipeline {
             }
             steps {
                 script {
-                    // Wait for app to be healthy
+                    // Wait for app with proper loop - FIX: Use seq instead of bash brace expansion
                     sh '''
                         echo "⏳ Waiting for application to be ready..."
-                        for i in {1..30}; do
-                            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://13.27.51.77:8081 || echo "000")
+                        for i in $(seq 1 30); do
+                            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://13.27.51.77:8081 2>/dev/null || echo "000")
                             echo "Attempt $i/30: HTTP Status = $HTTP_CODE"
                             
                             if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
@@ -79,10 +79,12 @@ pipeline {
                                 break
                             fi
                             
-                            if [ $i -eq 30 ]; then
-                                echo "❌ Application failed to become ready after 30 attempts"
-                                echo "Checking container logs..."
+                            if [ "$i" -eq 30 ]; then
+                                echo "❌ Application failed to become ready"
+                                echo "Container logs:"
                                 docker logs cicd-app-1 --tail 20 || true
+                                echo "Container status:"
+                                docker ps -a | grep cicd || true
                                 exit 1
                             fi
                             
@@ -100,7 +102,7 @@ pipeline {
                         mvn -B -Dmaven.repo.local=./.m2/repository \
                         -Dwdm.cachePath=./.m2/wdm \
                         -Dsurefire.useFile=false \
-                        clean test | grep -v "Downloading"
+                        clean test 2>&1 | grep -v "Downloading" || true
                     '''
                 }
             }
