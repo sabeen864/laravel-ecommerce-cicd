@@ -45,9 +45,9 @@ pipeline {
             agent {
                 docker {
                     image 'markhobson/maven-chrome:latest'
-                    // FIX: Added --privileged to fix DevToolsActivePort error
-                    // FIX: Added --shm-size=2g to prevent memory crashes
-                    args '--network host --privileged --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock'
+                    // FIX: -u 0:0 (Run as Root) fixes the "DevToolsActivePort" crash
+                    // FIX: --privileged and --shm-size ensure Chrome has resources
+                    args '-u 0:0 --network host --privileged --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock'
                     reuseNode true
                 }
             }
@@ -61,12 +61,12 @@ pipeline {
                         
                         echo "Running Maven tests..."
                         
-                        # FIX: The long flag below HIDES the "Downloading..." logs
-                        mvn -B \
-                        -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-                        -Dmaven.repo.local=./.m2/repository \
+                        # FIX: Using 'grep -v' to physically remove Downloading lines from the log
+                        # FIX: Using -Dsurefire.useFile=false to print tests to console immediately
+                        mvn -B -Dmaven.repo.local=./.m2/repository \
                         -Dwdm.cachePath=./.m2/wdm \
-                        clean test
+                        -Dsurefire.useFile=false \
+                        clean test | grep -v "Downloading"
                     '''
                 }
             }
