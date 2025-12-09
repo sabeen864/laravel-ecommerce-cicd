@@ -3,7 +3,6 @@ pipeline {
     
     environment {
         APP_URL = "http://13.27.51.77:8081"
-        TEST_URL = "http://localhost:8081"
     }
     
     stages {
@@ -15,7 +14,7 @@ pipeline {
                 sh '''
                 cd ${WORKSPACE}
                 
-                echo "Deploying to: ${APP_URL}"
+                echo "🚀 Deploying to: ${APP_URL}"
 
                 docker pull sabeen123/laravel-ecommerce:latest
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
@@ -49,8 +48,7 @@ pipeline {
                 docker exec cicd-app-1 php artisan config:cache || true
 
                 echo "✅ Deploy complete!"
-                echo "📍 Local: http://localhost:8081"
-                echo "🌐 Public: ${APP_URL}"
+                echo "🌐 Application live at: ${APP_URL}"
                 '''
             }
         }
@@ -65,18 +63,18 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        echo "⏳ Waiting for application at localhost:8081..."
+                        echo "⏳ Waiting for application..."
                         for i in $(seq 1 30); do
                             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081 2>/dev/null || echo "000")
-                            echo "Attempt $i/30: HTTP Status = $HTTP_CODE"
+                            echo "Attempt $i/30: HTTP $HTTP_CODE"
                             
                             if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-                                echo "✅ Application is ready!"
+                                echo "✅ Application ready!"
                                 break
                             fi
                             
                             if [ "$i" -eq 30 ]; then
-                                echo "❌ Application not ready after 30 attempts"
+                                echo "❌ Application not ready"
                                 exit 1
                             fi
                             
@@ -84,17 +82,15 @@ pipeline {
                         done
                     '''
                     
-                    echo 'Starting Selenium UI Tests...'
+                    echo '🧪 Running Selenium Tests...'
                     sh '''
                         rm -rf laravel-ecommerce-tests
                         git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
                         cd laravel-ecommerce-tests
 
-                        # Replace the URL in test files to use localhost
-                        echo "🔧 Updating test URLs to use localhost..."
+                        # Update test URLs to localhost (tests run on same host)
                         find . -type f -name "*.java" -exec sed -i "s|http://13.27.51.77:8081|http://localhost:8081|g" {} +
                         
-                        echo "Running Maven tests..."
                         mvn -B -Dmaven.repo.local=./.m2/repository \
                         -Dwdm.cachePath=./.m2/wdm \
                         -Dsurefire.useFile=false \
@@ -116,23 +112,45 @@ pipeline {
                 def gitEmail = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim()
                 def recipient = (gitEmail.contains('internal') || gitEmail.isEmpty()) ? 'syedasabeen61@gmail.com' : gitEmail
 
-                echo "📧 Sending report to: ${recipient}"
-
                 def status = currentBuild.result ?: 'SUCCESS'
                 def icon = status == 'SUCCESS' ? '✅' : '❌'
                 def color = status == 'SUCCESS' ? 'green' : 'red'
+                
+                def testResults = junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                def totalTests = testResults.totalCount
+                def passedTests = totalTests - testResults.failCount - testResults.skipCount
+                def failedTests = testResults.failCount
 
                 emailext(
                     to: recipient,
-                    subject: "${icon} CI/CD Build #${BUILD_NUMBER}: ${status}",
+                    subject: "${icon} Laravel E-Commerce Build #${BUILD_NUMBER}: ${status}",
                     body: """
-                        <h2 style="color:${color}">${icon} Build ${status}</h2>
-                        <p><strong>Job:</strong> ${JOB_NAME} #${BUILD_NUMBER}</p>
-                        <p><strong>App URL:</strong> <a href="${APP_URL}">${APP_URL}</a></p>
-                        <p><strong>Console:</strong> <a href="${BUILD_URL}">${BUILD_URL}</a></p>
+                        <html>
+                        <body style="font-family: Arial, sans-serif;">
+                            <h2 style="color:${color}">${icon} Build ${status}</h2>
+                            
+                            <h3>📊 Test Results</h3>
+                            <ul>
+                                <li><strong>Total Tests:</strong> ${totalTests}</li>
+                                <li style="color:green"><strong>Passed:</strong> ${passedTests}</li>
+                                <li style="color:red"><strong>Failed:</strong> ${failedTests}</li>
+                            </ul>
+                            
+                            <h3>🔗 Links</h3>
+                            <ul>
+                                <li><strong>Application:</strong> <a href="${APP_URL}">${APP_URL}</a></li>
+                                <li><strong>Jenkins Build:</strong> <a href="${BUILD_URL}">Build #${BUILD_NUMBER}</a></li>
+                                <li><strong>Test Reports:</strong> <a href="${BUILD_URL}testReport/">View Details</a></li>
+                            </ul>
+                            
+                            <p><em>Deployed at: ${new Date()}</em></p>
+                        </body>
+                        </html>
                     """,
                     mimeType: 'text/html'
                 )
+                
+                echo "📧 Email sent to: ${recipient}"
             }
         }
     }
