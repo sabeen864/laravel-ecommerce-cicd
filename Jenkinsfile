@@ -45,8 +45,9 @@ pipeline {
             agent {
                 docker {
                     image 'markhobson/maven-chrome:latest'
-                    // FIX: Added --shm-size=2g to prevent Chrome crash
-                    args '--network host --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock'
+                    // FIX: Added --privileged to fix DevToolsActivePort error
+                    // FIX: Added --shm-size=2g to prevent memory crashes
+                    args '--network host --privileged --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock'
                     reuseNode true
                 }
             }
@@ -59,8 +60,13 @@ pipeline {
                         cd laravel-ecommerce-tests
                         
                         echo "Running Maven tests..."
-                        # Using Batch mode (-B) to reduce log noise
-                        mvn -B -Dmaven.repo.local=./.m2/repository -Dwdm.cachePath=./.m2/wdm clean test
+                        
+                        # FIX: The long flag below HIDES the "Downloading..." logs
+                        mvn -B \
+                        -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+                        -Dmaven.repo.local=./.m2/repository \
+                        -Dwdm.cachePath=./.m2/wdm \
+                        clean test
                     '''
                 }
             }
@@ -75,7 +81,7 @@ pipeline {
     post {
         always {
             script {
-                // Get Email or Fallback to your specific email
+                // Get Email or Fallback
                 def gitEmail = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim()
                 def recipient = (gitEmail.contains('internal') || gitEmail.isEmpty()) ? 'syedasabeen61@gmail.com' : gitEmail
                 
