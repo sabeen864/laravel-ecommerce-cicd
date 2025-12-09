@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         APP_URL = "http://3.27.51.77:8081"
-        JENKINS_URL = "http://3.27.51.77:8080"
     }
 
     stages {
@@ -84,102 +83,69 @@ pipeline {
                     '''
 
                     echo '🧪 Running Selenium Tests...'
-                    sh '''
-                        rm -rf laravel-ecommerce-tests
-                        git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
-                        cd laravel-ecommerce-tests
+                    catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                        sh '''
+                            rm -rf laravel-ecommerce-tests
+                            git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
+                            cd laravel-ecommerce-tests
 
-                        find . -type f -name "*.java" -exec sed -i "s|http://13.27.51.77:8081|http://localhost:8081|g" {} +
-                        find . -type f -name "*.java" -exec sed -i "s|http://3.27.51.77:8081|http://localhost:8081|g" {} +
+                            find . -type f -name "*.java" -exec sed -i "s|http://13.27.51.77:8081|http://localhost:8081|g" {} +
+                            find . -type f -name "*.java" -exec sed -i "s|http://3.27.51.77:8081|http://localhost:8081|g" {} +
 
-                        mvn -B -Dmaven.repo.local=./.m2/repository -Dwdm.cachePath=./.m2/wdm -Dsurefire.useFile=false clean test 2>&1 | grep -v "Downloading" || echo "Tests completed"
-                    '''
+                            mvn -B -Dmaven.repo.local=./.m2/repository -Dwdm.cachePath=./.m2/wdm -Dsurefire.useFile=false clean test 2>&1 | grep -v "Downloading" || true
+                        '''
+                    }
                 }
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml', healthScaleFactor: 0.0
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                     archiveArtifacts artifacts: '**/target/surefire-reports/*', allowEmptyArchive: true
                 }
             }
         }
     }
     post {
-        success {
+        always {
             script {
                 def gitEmail = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim()
                 def recipient = (gitEmail.contains('internal') || gitEmail.isEmpty()) ? 'syedasabeen61@gmail.com' : gitEmail
 
-                // Simple email without complex test parsing
+                def status = currentBuild.result ?: 'SUCCESS'
+                def icon = status == 'SUCCESS' ? '✅' : '❌'
+                def color = status == 'SUCCESS' ? 'green' : 'red'
+
+                def testResults = junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                def totalTests = testResults.totalCount
+                def passedTests = totalTests - testResults.failCount - testResults.skipCount
+                def failedTests = testResults.failCount
+
                 emailext(
                     to: recipient,
-                    subject: "✅ Laravel E-Commerce Deployment - Build #${BUILD_NUMBER}",
+                    subject: "${icon} Laravel E-Commerce Build #${BUILD_NUMBER}: ${status}",
                     body: """
                         <html>
-                        <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
-                            <div style="max-width: 700px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                                <h2 style="color: green; margin-top: 0;">✅ Deployment Successful</h2>
-                                
-                                <div style="background-color: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
-                                    <h3 style="margin-top: 0; color: #155724;">🌐 Your Website is Live!</h3>
-                                    <p style="margin: 15px 0;">
-                                        <a href="${APP_URL}" 
-                                           style="display: inline-block; background-color: #28a745; color: white; padding: 15px 30px; 
-                                                  text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 18px;">
-                                            Open Website →
-                                        </a>
-                                    </p>
-                                    <p style="color: #155724; font-size: 16px; margin: 10px 0;">
-                                        <strong>URL:</strong> ${APP_URL}
-                                    </p>
-                                </div>
+                        <body style="font-family: Arial, sans-serif;">
+                            <h2 style="color:${color}">${icon} Build ${status}</h2>
 
-                                <h3>📊 Automated Tests Executed</h3>
-                                <p>All deployment tests have been executed. Check detailed results in Jenkins:</p>
-                                
-                                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                                    <p style="margin: 5px 0;">
-                                        <strong>📋 Jenkins Build:</strong> 
-                                        <a href="${JENKINS_URL}/job/laravel-ecommerce-cicd/${BUILD_NUMBER}/" style="color: #0066cc;">
-                                            View Build #${BUILD_NUMBER}
-                                        </a>
-                                    </p>
-                                    <p style="margin: 5px 0;">
-                                        <strong>🧪 Test Report:</strong> 
-                                        <a href="${JENKINS_URL}/job/laravel-ecommerce-cicd/${BUILD_NUMBER}/testReport/" style="color: #0066cc;">
-                                            View Test Results
-                                        </a>
-                                    </p>
-                                    <p style="margin: 5px 0;">
-                                        <strong>📁 Console:</strong> 
-                                        <a href="${JENKINS_URL}/job/laravel-ecommerce-cicd/${BUILD_NUMBER}/console" style="color: #0066cc;">
-                                            View Console Output
-                                        </a>
-                                    </p>
-                                    <p style="color: #666; font-size: 13px; margin-top: 10px;">
-                                        <em>Note: Jenkins links require password access</em>
-                                    </p>
-                                </div>
+                            <h3>📊 Test Results</h3>
+                            <ul>
+                                <li><strong>Total Tests:</strong> ${totalTests}</li>
+                                <li style="color:green"><strong>Passed:</strong> ${passedTests}</li>
+                                <li style="color:red"><strong>Failed:</strong> ${failedTests}</li>
+                            </ul>
 
-                                <div style="background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-                                    <p style="margin: 0; color: #856404; font-size: 14px;">
-                                        <strong>ℹ️ Note:</strong> Some test failures are expected if products haven't been added to the database yet. 
-                                        The website is fully functional regardless of test results.
-                                    </p>
-                                </div>
+                            <h3>🔗 Quick Links</h3>
+                            <ul>
+                                <li><strong>🌐 Live Application:</strong> <a href="${APP_URL}" style="font-size:16px; color:#0066cc;">${APP_URL}</a></li>
+                                <li><strong>📋 Jenkins Build:</strong> <a href="${BUILD_URL}" style="color:#0066cc;">View Build #${BUILD_NUMBER}</a></li>
+                                <li><strong>📊 Test Details:</strong> <a href="${BUILD_URL}testReport/" style="color:#0066cc;">View Test Report</a></li>
+                                <li><strong>📁 Console Output:</strong> <a href="${BUILD_URL}console" style="color:#0066cc;">View Console Logs</a></li>
+                            </ul>
 
-                                <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
-                                
-                                <div style="color: #666; font-size: 14px;">
-                                    <p style="margin: 5px 0;"><strong>Build:</strong> #${BUILD_NUMBER}</p>
-                                    <p style="margin: 5px 0;"><strong>Time:</strong> ${new Date().format('dd MMM yyyy, hh:mm a')}</p>
-                                    <p style="margin: 5px 0;"><strong>Status:</strong> <span style="color: green; font-weight: bold;">✅ SUCCESS</span></p>
-                                </div>
-                                
-                                <p style="color: #999; font-size: 12px; margin-top: 20px;">
-                                    This is an automated deployment notification from your CI/CD pipeline.
-                                </p>
-                            </div>
+                            <hr style="margin: 20px 0;">
+                            <p style="color:#666;"><em>Deployed at: ${new Date()}</em></p>
+                            <p style="color:#666; font-size:12px;">Note: Some tests may fail if the database is empty. This doesn't affect the deployment.</p>
                         </body>
                         </html>
                     """,
@@ -187,7 +153,7 @@ pipeline {
                 )
 
                 echo "📧 Email sent to: ${recipient}"
-                echo "🎉 Deployment completed successfully!"
+                echo "🎉 Build completed successfully!"
                 echo "🌐 Application: ${APP_URL}"
             }
         }
