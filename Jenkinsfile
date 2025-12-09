@@ -3,6 +3,7 @@ pipeline {
     
     environment {
         APP_URL = "http://13.27.51.77:8081"
+        TEST_URL = "http://localhost:8081"
     }
     
     stages {
@@ -16,11 +17,9 @@ pipeline {
                 
                 echo "Deploying to: ${APP_URL}"
 
-                # Deploy
                 docker pull sabeen123/laravel-ecommerce:latest
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
 
-                # Config
                 cp .env.example .env
                 sed -i "s|APP_URL=.*|APP_URL=${APP_URL}|g" .env
                 sed -i "s|DB_HOST=.*|DB_HOST=db|g" .env
@@ -29,23 +28,19 @@ pipeline {
                 sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=secret|g" .env
                 sed -i "s|APP_KEY=.*|APP_KEY=base64:$(openssl rand -base64 32)|g" .env
 
-                # Up
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
 
-                # Setup with proper permissions
                 echo "⏳ Waiting for containers..."
                 sleep 15
                 
                 docker cp .env cicd-app-1:/var/www/.env
                 
-                # Set Laravel permissions
                 echo "🔧 Setting permissions..."
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chown www-data:www-data /var/www/.env
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
                 
-                # Run artisan commands
                 echo "🚀 Running Laravel commands..."
                 docker exec cicd-app-1 php artisan cache:clear || true
                 docker exec cicd-app-1 php artisan config:clear || true
@@ -53,7 +48,9 @@ pipeline {
                 docker exec cicd-app-1 php artisan storage:link || true
                 docker exec cicd-app-1 php artisan config:cache || true
 
-                echo "✅ LIVE: ${APP_URL}"
+                echo "✅ Deploy complete!"
+                echo "📍 Local: http://localhost:8081"
+                echo "🌐 Public: ${APP_URL}"
                 '''
             }
         }
@@ -67,11 +64,10 @@ pipeline {
             }
             steps {
                 script {
-                    // Wait for app with proper loop - FIX: Use seq instead of bash brace expansion
                     sh '''
-                        echo "⏳ Waiting for application to be ready..."
+                        echo "⏳ Waiting for application at localhost:8081..."
                         for i in $(seq 1 30); do
-                            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://13.27.51.77:8081 2>/dev/null || echo "000")
+                            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081 2>/dev/null || echo "000")
                             echo "Attempt $i/30: HTTP Status = $HTTP_CODE"
                             
                             if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
@@ -80,11 +76,7 @@ pipeline {
                             fi
                             
                             if [ "$i" -eq 30 ]; then
-                                echo "❌ Application failed to become ready"
-                                echo "Container logs:"
-                                docker logs cicd-app-1 --tail 20 || true
-                                echo "Container status:"
-                                docker ps -a | grep cicd || true
+                                echo "❌ Application not ready after 30 attempts"
                                 exit 1
                             fi
                             
@@ -98,6 +90,10 @@ pipeline {
                         git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
                         cd laravel-ecommerce-tests
 
+                        # Replace the URL in test files to use localhost
+                        echo "🔧 Updating test URLs to use localhost..."
+                        find . -type f -name "*.java" -exec sed -i "s|http://13.27.51.77:8081|http://localhost:8081|g" {} +
+                        
                         echo "Running Maven tests..."
                         mvn -B -Dmaven.repo.local=./.m2/repository \
                         -Dwdm.cachePath=./.m2/wdm \
