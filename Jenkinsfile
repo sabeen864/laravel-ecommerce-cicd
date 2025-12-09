@@ -8,17 +8,15 @@ pipeline {
             steps {
                 sh '''
                 cd ${WORKSPACE}
-                # Get current public IP
+                # Get public IP
                 PUBLIC_IP=$(timeout 5 curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo "13.54.247.55")
                 echo "Deploying to: http://${PUBLIC_IP}:8081"
                 
-                # Pull latest image
+                # Deploy
                 docker pull sabeen123/laravel-ecommerce:latest
-                
-                # Stop existing containers
                 docker-compose -f docker-compose-jenkins.yml -p cicd down || true
                 
-                # Update .env file
+                # Config
                 cp .env.example .env
                 sed -i "s|APP_URL=.*|APP_URL=http://${PUBLIC_IP}:8081|g" .env
                 sed -i "s|DB_HOST=.*|DB_HOST=db|g" .env
@@ -27,10 +25,10 @@ pipeline {
                 sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=secret|g" .env
                 sed -i "s|APP_KEY=.*|APP_KEY=base64:$(openssl rand -base64 32)|g" .env
                 
-                # Start containers
+                # Up
                 docker-compose -f docker-compose-jenkins.yml -p cicd up -d --remove-orphans
                 
-                # Setup App
+                # Setup
                 sleep 15
                 docker cp .env cicd-app-1:/var/www/.env
                 docker exec -u root cicd-app-1 chown www-data:www-data /var/www/.env
@@ -47,7 +45,8 @@ pipeline {
             agent {
                 docker {
                     image 'markhobson/maven-chrome:latest'
-                    args '--network host -v /var/run/docker.sock:/var/run/docker.sock'
+                    // FIX: Added --shm-size=2g to prevent Chrome crash
+                    args '--network host --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock'
                     reuseNode true
                 }
             }
@@ -55,14 +54,12 @@ pipeline {
                 script {
                     echo 'Starting Selenium UI Tests...'
                     sh '''
-                        # Prepare test directory
                         rm -rf laravel-ecommerce-tests
                         git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
                         cd laravel-ecommerce-tests
                         
-                        echo "Running Maven tests (Batch Mode)..."
-                        # FIX 1: -B (Batch mode) stops the "Downloading" spam
-                        # FIX 2: -Dwdm.cachePath fixes the Permission Denied error for Chrome Driver
+                        echo "Running Maven tests..."
+                        # Using Batch mode (-B) to reduce log noise
                         mvn -B -Dmaven.repo.local=./.m2/repository -Dwdm.cachePath=./.m2/wdm clean test
                     '''
                 }
@@ -78,9 +75,9 @@ pipeline {
     post {
         always {
             script {
-                // Get Email - Force fallback if it detects the internal EC2 address
+                // Get Email or Fallback to your specific email
                 def gitEmail = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim()
-                def recipient = (gitEmail.contains('internal') || gitEmail.isEmpty()) ? 'sabeen864@gmail.com' : gitEmail
+                def recipient = (gitEmail.contains('internal') || gitEmail.isEmpty()) ? 'syedasabeen61@gmail.com' : gitEmail
                 
                 echo "📧 Sending report to: ${recipient}"
                 
