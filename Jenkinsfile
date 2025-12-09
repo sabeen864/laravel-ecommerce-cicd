@@ -84,7 +84,6 @@ pipeline {
                     '''
 
                     echo '🧪 Running Selenium Tests...'
-                    // Run tests but always return success
                     sh '''
                         rm -rf laravel-ecommerce-tests
                         git clone https://github.com/sabeen864/laravel-ecommerce-tests.git
@@ -93,14 +92,12 @@ pipeline {
                         find . -type f -name "*.java" -exec sed -i "s|http://13.27.51.77:8081|http://localhost:8081|g" {} +
                         find . -type f -name "*.java" -exec sed -i "s|http://3.27.51.77:8081|http://localhost:8081|g" {} +
 
-                        # Run tests but don't fail the pipeline
-                        mvn -B -Dmaven.repo.local=./.m2/repository -Dwdm.cachePath=./.m2/wdm -Dsurefire.useFile=false clean test 2>&1 | grep -v "Downloading" || echo "Tests completed with some failures (not critical)"
+                        mvn -B -Dmaven.repo.local=./.m2/repository -Dwdm.cachePath=./.m2/wdm -Dsurefire.useFile=false clean test 2>&1 | grep -v "Downloading" || echo "Tests completed with some failures"
                     '''
                 }
             }
             post {
                 always {
-                    // Record test results but don't fail on test failures
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml', healthScaleFactor: 0.0
                     archiveArtifacts artifacts: '**/target/surefire-reports/*', allowEmptyArchive: true
                 }
@@ -113,25 +110,33 @@ pipeline {
                 def gitEmail = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim()
                 def recipient = (gitEmail.contains('internal') || gitEmail.isEmpty()) ? 'syedasabeen61@gmail.com' : gitEmail
 
-                // Force SUCCESS status regardless of test results
+                // Force SUCCESS status
                 currentBuild.result = 'SUCCESS'
                 
                 def status = 'SUCCESS'
                 def icon = '✅'
                 def color = 'green'
 
-                def testResults = junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml', healthScaleFactor: 0.0
-                def totalTests = testResults.totalCount
-                def passedTests = totalTests - testResults.failCount - testResults.skipCount
-                def failedTests = testResults.failCount
-
-                // Get individual test details
+                // Get test results
+                def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
+                def totalTests = 0
+                def passedTests = 0
+                def failedTests = 0
                 def testDetails = ""
-                testResults.getPassedTests().each { test ->
-                    testDetails += "<tr style='background-color: #d4edda;'><td style='padding: 8px; border: 1px solid #ddd;'>✅ ${test.getDisplayName()}</td><td style='padding: 8px; border: 1px solid #ddd; color: green;'>PASSED</td></tr>"
-                }
-                testResults.getFailedTests().each { test ->
-                    testDetails += "<tr style='background-color: #f8d7da;'><td style='padding: 8px; border: 1px solid #ddd;'>❌ ${test.getDisplayName()}</td><td style='padding: 8px; border: 1px solid #ddd; color: red;'>FAILED</td></tr>"
+
+                if (testResultAction != null) {
+                    def testResult = testResultAction.getResult()
+                    totalTests = testResult.getTotalCount()
+                    failedTests = testResult.getFailCount()
+                    passedTests = totalTests - failedTests - testResult.getSkipCount()
+                    
+                    // Build test details table
+                    testResult.getPassedTests().each { test ->
+                        testDetails += "<tr style='background-color: #d4edda;'><td style='padding: 8px; border: 1px solid #ddd;'>✅ ${test.getDisplayName()}</td><td style='padding: 8px; border: 1px solid #ddd; color: green;'>PASSED</td></tr>"
+                    }
+                    testResult.getFailedTests().each { test ->
+                        testDetails += "<tr style='background-color: #f8d7da;'><td style='padding: 8px; border: 1px solid #ddd;'>❌ ${test.getDisplayName()}</td><td style='padding: 8px; border: 1px solid #ddd; color: red;'>FAILED</td></tr>"
+                    }
                 }
 
                 emailext(
