@@ -1,10 +1,10 @@
 pipeline {
     agent any
-    
+
     environment {
-        APP_URL = "http://13.27.51.77:8081"
+        APP_URL = "http://3.27.51.77:8081"
     }
-    
+
     stages {
         stage('Checkout') {
             steps { checkout scm }
@@ -13,7 +13,7 @@ pipeline {
             steps {
                 sh '''
                 cd ${WORKSPACE}
-                
+
                 echo "🚀 Deploying to: ${APP_URL}"
 
                 docker pull sabeen123/laravel-ecommerce:latest
@@ -31,15 +31,15 @@ pipeline {
 
                 echo "⏳ Waiting for containers..."
                 sleep 15
-                
+
                 docker cp .env cicd-app-1:/var/www/.env
-                
+
                 echo "🔧 Setting permissions..."
                 docker exec -u root cicd-app-1 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
                 docker exec -u root cicd-app-1 chown www-data:www-data /var/www/.env
                 docker exec -u root cicd-app-1 chmod 644 /var/www/.env
-                
+
                 echo "🚀 Running Laravel commands..."
                 docker exec cicd-app-1 php artisan cache:clear || true
                 docker exec cicd-app-1 php artisan config:clear || true
@@ -67,21 +67,21 @@ pipeline {
                         for i in $(seq 1 30); do
                             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081 2>/dev/null || echo "000")
                             echo "Attempt $i/30: HTTP $HTTP_CODE"
-                            
+
                             if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
                                 echo "✅ Application ready!"
                                 break
                             fi
-                            
+
                             if [ "$i" -eq 30 ]; then
                                 echo "❌ Application not ready"
                                 exit 1
                             fi
-                            
+
                             sleep 2
                         done
                     '''
-                    
+
                     echo '🧪 Running Selenium Tests...'
                     sh '''
                         rm -rf laravel-ecommerce-tests
@@ -90,7 +90,8 @@ pipeline {
 
                         # Update test URLs to localhost (tests run on same host)
                         find . -type f -name "*.java" -exec sed -i "s|http://13.27.51.77:8081|http://localhost:8081|g" {} +
-                        
+                        find . -type f -name "*.java" -exec sed -i "s|http://3.27.51.77:8081|http://localhost:8081|g" {} +
+
                         mvn -B -Dmaven.repo.local=./.m2/repository \
                         -Dwdm.cachePath=./.m2/wdm \
                         -Dsurefire.useFile=false \
@@ -115,7 +116,7 @@ pipeline {
                 def status = currentBuild.result ?: 'SUCCESS'
                 def icon = status == 'SUCCESS' ? '✅' : '❌'
                 def color = status == 'SUCCESS' ? 'green' : 'red'
-                
+
                 def testResults = junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                 def totalTests = testResults.totalCount
                 def passedTests = totalTests - testResults.failCount - testResults.skipCount
@@ -128,28 +129,28 @@ pipeline {
                         <html>
                         <body style="font-family: Arial, sans-serif;">
                             <h2 style="color:${color}">${icon} Build ${status}</h2>
-                            
+
                             <h3>📊 Test Results</h3>
                             <ul>
                                 <li><strong>Total Tests:</strong> ${totalTests}</li>
                                 <li style="color:green"><strong>Passed:</strong> ${passedTests}</li>
                                 <li style="color:red"><strong>Failed:</strong> ${failedTests}</li>
                             </ul>
-                            
+
                             <h3>🔗 Links</h3>
                             <ul>
                                 <li><strong>Application:</strong> <a href="${APP_URL}">${APP_URL}</a></li>
                                 <li><strong>Jenkins Build:</strong> <a href="${BUILD_URL}">Build #${BUILD_NUMBER}</a></li>
                                 <li><strong>Test Reports:</strong> <a href="${BUILD_URL}testReport/">View Details</a></li>
                             </ul>
-                            
+
                             <p><em>Deployed at: ${new Date()}</em></p>
                         </body>
                         </html>
                     """,
                     mimeType: 'text/html'
                 )
-                
+
                 echo "📧 Email sent to: ${recipient}"
             }
         }
